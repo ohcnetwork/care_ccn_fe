@@ -1,0 +1,101 @@
+/*
+ * Styles for the remote build. CARE already loads Tailwind's base styles and
+ * defines every theme variable, so the theme is only referenced (nothing is
+ * emitted at `:root`) and the utilities are scoped to `.care-ccn-fe`. Global
+ * copies of utilities like `.w-full` would load after CARE's and beat its
+ * responsive variants (`sm:w-3/12`) on pages this app never renders.
+ * Every root this app renders carries `CCN_SCOPE` (see `src/lib/scope.ts`).
+ */
+@import "tailwindcss/theme.css" theme(reference);
+
+.care-ccn-fe {
+  @import "tailwindcss/utilities.css";
+}
+
+@source "./";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Token names copied from care_fe `src/style/careui.css`; keep in step. */
+@theme inline reference {
+  --font-sans: "Figtree Variable", sans-serif;
+  --font-mono:
+    "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
+
+  --color-background: var(--background);
+  --color-soft-background: var(--soft-background);
+  --color-muted-background: var(--muted-background);
+  --color-strong-background: var(--strong-background);
+  --color-muted: var(--muted);
+
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-soft-foreground: var(--soft-foreground);
+  --color-disabled-foreground: var(--disabled-foreground);
+  --color-placeholder-foreground: var(--placeholder-foreground);
+  --color-inverse-foreground: var(--inverse-foreground);
+
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+
+  --color-border: var(--border);
+  --color-strong-border: var(--strong-border);
+  --color-stronger-border: var(--stronger-border);
+  --color-soft-border: var(--soft-border);
+  --color-inverse-border: var(--inverse-border);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Primary color scale */
+  --color-primary-50: var(--primary-50);
+  --color-primary-100: var(--primary-100);
+  --color-primary-200: var(--primary-200);
+  --color-primary-300: var(--primary-300);
+  --color-primary-400: var(--primary-400);
+  --color-primary-500: var(--primary-500);
+  --color-primary-600: var(--primary-600);
+  --color-primary-700: var(--primary-700);
+  --color-primary-800: var(--primary-800);
+  --color-primary-900: var(--primary-900);
+  --color-primary-950: var(--primary-950);
+}
