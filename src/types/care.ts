@@ -76,3 +76,9 @@ export interface ReferralResource {
   /** `ccn_ref` marks copies received from the linked network referral. */
   metadata?: Record<string, unknown>;
 }
+
+/** The patient fields this app shows. */
+export interface PatientRead {
+  id: string;
+  name: string;
+}

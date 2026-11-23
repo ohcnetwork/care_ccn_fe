@@ -1,0 +1,266 @@
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useParams } from "@tanstack/react-router";
+import { Network } from "lucide-react";
+import {
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
+
+import { query } from "@/lib/request";
+import { CcnScope } from "@/lib/scope";
+
+import { Badge } from "@/components/ui/badge";
+import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
+import { Muted } from "@/components/ui/typography";
+
+import { NetworkReferralWorkflow } from "@/components/network/NetworkReferralWorkflow";
+import type { ReferralDestinationPickerProps } from "@/components/overrides/ReferralDestinationPickerOverride";
+import { useReferralDialog } from "@/components/overrides/referralDialogContext";
+
+import { useTranslation } from "@/hooks/useTranslation";
+
+import { careRoutes } from "@/apis/care";
+
+const NETWORK = "ccn_network";
+
+/** CARE's own destination types, with CARE's labels. */
+const CORE_TYPES = [
+  { value: "facility", label: "referral_destination_facility" },
+  { value: "internal_organization", label: "referral_destination_departments" },
+  {
+    value: "external_organization",
+    label: "referral_destination_organization",
+  },
+] as const;
+
+type CoreType = (typeof CORE_TYPES)[number]["value"];
+type DestinationType = CoreType | typeof NETWORK;
+
+const UNIT_LIMIT = 100;
+
+/**
+ * CARE's "Refer to" block with a "Network (CCN)" type added. The CARE types
+ * list the referral units of that type, and the dialog continues as usual.
+ *
+ * "Network (CCN)" runs the network workflow in the same dialog, over CARE's
+ * form, when the `CreateReferralDialog` override provides the dialog's
+ * patient and encounter. Choosing a CARE type there returns to CARE's form.
+ * Without that override it opens the network referral page instead.
+ */
+export default function NetworkDestinationPicker({
+  selected,
+  onSelect,
+  __base: Base,
+}: ReferralDestinationPickerProps) {
+  const { t } = useTranslation();
+  const id = useId();
+  const navigate = useNavigate();
+  const dialog = useReferralDialog();
+  const params = useParams({ strict: false }) as Record<string, unknown>;
+  const facilityId = dialog?.facilityId ?? stringParam(params.facilityId);
+  const patientId =
+    dialog?.patientId ??
+    stringParam(params.patientId) ??
+    stringParam(params.id);
+  const encounterId = dialog
+    ? dialog.encounterId
+    : stringParam(params.encounterId);
+
+  const [type, setType] = useState<DestinationType>(
+    selected?.entity_type === "internal_organization" ||
+      selected?.entity_type === "external_organization"
+      ? selected.entity_type
+      : "facility",
+  );
+  // The CARE type to return to when the network workflow is left.
+  const [lastCoreType, setLastCoreType] = useState<CoreType>(
+    type === NETWORK ? "facility" : type,
+  );
+  const changeType = (value: DestinationType) => {
+    if (value !== NETWORK) setLastCoreType(value);
+    setType(value);
+  };
+
+  // A network referral is sent from a facility, for a known patient.
+  const networkAvailable = !!facilityId && !!patientId;
+  useEffect(() => {
+    if (dialog || type !== NETWORK || !facilityId || !patientId) return;
+    void navigate({
+      to: "/facility/$facilityId/patient/$patientId/network_referral",
+      params: { facilityId, patientId },
+      search: encounterId ? { encounterId } : {},
+    });
+  }, [dialog, type, facilityId, patientId, encounterId, navigate]);
+
+  // Without the route context the network type cannot open; keep CARE's.
+  if (!networkAvailable && Base) {
+    return <Base selected={selected} onSelect={onSelect} />;
+  }
+
+  const typeSelect = (
+    <Field className="max-w-xs">
+      <FieldLabel htmlFor={id}>{t("referral_destination_type")}</FieldLabel>
+      <Select
+        value={type}
+        onValueChange={(value) => changeType(value as DestinationType)}
+      >
+        <SelectTrigger id={id} data-cy="referral-destination-type">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {CORE_TYPES.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {t(item.label)}
+            </SelectItem>
+          ))}
+          <SelectItem value={NETWORK}>{t("ccn_destination_type")}</SelectItem>
+        </SelectContent>
+      </Select>
+    </Field>
+  );
+
+  const inPlace = type === NETWORK && !!dialog && networkAvailable;
+
+  return (
+    <CcnScope>
+      <div className="space-y-4">
+        {/* In place, the workflow shows the type select itself. */}
+        {!inPlace && typeSelect}
+        {type !== NETWORK ? (
+          <UnitSelect
+            key={type}
+            type={type}
+            selected={selected?.entity_type === type ? selected : null}
+            onSelect={onSelect}
+          />
+        ) : inPlace && dialog && facilityId && patientId ? (
+          <NetworkWorkflowPanel>
+            {(scrollRef) => (
+              <NetworkReferralWorkflow
+                facilityId={facilityId}
+                patientId={patientId}
+                encounterId={encounterId}
+                scrollRef={scrollRef}
+                destinationControl={typeSelect}
+                onCancel={() => setType(lastCoreType)}
+                onSent={dialog.onNetworkReferralSent}
+              />
+            )}
+          </NetworkWorkflowPanel>
+        ) : (
+          <p
+            role="status"
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <Network className="size-4" aria-hidden="true" />
+            {t("ccn_destination_opening")}
+          </p>
+        )}
+      </div>
+    </CcnScope>
+  );
+}
+
+/**
+ * Covers CARE's dialog content with the network workflow. It stays inside
+ * the dialog (no portal), so the dialog keeps focus and Escape closes both.
+ */
+function NetworkWorkflowPanel({
+  children,
+}: {
+  children: (scrollRef: RefObject<HTMLDivElement | null>) => ReactNode;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  return (
+    <div
+      ref={scrollRef}
+      className="fixed inset-0 z-50 overflow-y-auto bg-background px-4 pt-6 md:px-8"
+      data-cy="ccn-network-referral-panel"
+    >
+      {children(scrollRef)}
+    </div>
+  );
+}
+
+function stringParam(value: unknown) {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+/** The active referral units of one CARE destination type. */
+function UnitSelect({
+  type,
+  selected,
+  onSelect,
+}: {
+  type: CoreType;
+  selected: ReferralDestinationPickerProps["selected"];
+  onSelect: ReferralDestinationPickerProps["onSelect"];
+}) {
+  const { t } = useTranslation();
+  const id = useId();
+  const unitsQuery = useQuery({
+    queryKey: ["referrals", "destination-picker", "ccn", type],
+    queryFn: query(careRoutes.listReferralAvailabilities, {
+      queryParams: {
+        entity_type: type,
+        status: "active",
+        ordering: "name",
+        limit: UNIT_LIMIT,
+      },
+      silent: true,
+    }),
+  });
+  const units = unitsQuery.data?.results ?? [];
+
+  return (
+    <Field className="min-w-0">
+      <FieldLabel htmlFor={id}>{t("referral_picker_unit")}</FieldLabel>
+      {unitsQuery.isPending ? (
+        <Muted className="flex items-center gap-2">
+          <Spinner className="size-4 animate-spin" />
+          {t("loading")}
+        </Muted>
+      ) : unitsQuery.isError ? (
+        <Muted>{t("referral_picker_load_error")}</Muted>
+      ) : !units.length ? (
+        <Muted>{t("referral_picker_no_units")}</Muted>
+      ) : (
+        <Select
+          value={selected?.id ?? ""}
+          onValueChange={(value) => {
+            const unit = units.find((item) => item.id === value);
+            if (unit) onSelect(unit);
+          }}
+        >
+          <SelectTrigger id={id} data-cy="referral-destination-unit">
+            <SelectValue placeholder={t("referral_picker_select_unit")} />
+          </SelectTrigger>
+          <SelectContent>
+            {units.map((unit) => (
+              <SelectItem key={unit.id} value={unit.id}>
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate">{unit.name}</span>
+                  <Badge variant="neutral" size="xs">
+                    {t(`referral_type_${unit.referral_type}`)}
+                  </Badge>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </Field>
+  );
+}

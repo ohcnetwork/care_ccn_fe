@@ -437,6 +437,27 @@ export function networkOfferValue(offer: NetworkOffer) {
   return `${offer.context.bpp_id}|${offer.offerId}`;
 }
 
+/**
+ * Whether a provider's name, network id, or one of its services or receiving
+ * organizations contains `text` (ignoring case). Empty text matches all.
+ */
+export function networkProviderMatches(
+  provider: NetworkProvider,
+  text: string,
+) {
+  const needle = text.trim().toLocaleLowerCase();
+  if (!needle) return true;
+  return [
+    provider.name,
+    provider.bppId,
+    ...provider.offers.flatMap((offer) => [
+      offer.offerName,
+      offer.organizationName,
+      offer.catalogName,
+    ]),
+  ].some((value) => value?.toLocaleLowerCase().includes(needle));
+}
+
 export function groupNetworkOffers(offers: NetworkOffer[]): NetworkProvider[] {
   const providers = new Map<string, NetworkProvider>();
   for (const offer of offers) {

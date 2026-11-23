@@ -1,9 +1,8 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Check, RefreshCw, Search } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { mutate } from "@/lib/request";
-import { query } from "@/lib/request";
+import { query, request } from "@/lib/request";
 import { cn } from "@/lib/utils";
 
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +24,6 @@ import { useTranslation } from "@/hooks/useTranslation";
 
 import { ccnMessageRoutes, ccnReferralRoutes } from "@/apis/ccn";
 import {
-  BecknActionResponse,
   BecknDiscoverBody,
   NetworkOffer,
   NetworkOfferKind,
@@ -36,6 +34,7 @@ import {
   isFailedTransaction,
   networkOfferValue,
   networkProviderKey,
+  networkProviderMatches,
   transactionErrorText,
 } from "@/types/ccn";
 
@@ -83,19 +82,31 @@ export function NetworkDestinationSearch({
   const [providerKey, setProviderKey] = useState<string>();
   const [transactionId, setTransactionId] = useState<string>();
   const [startedAt, setStartedAt] = useState(0);
-  const discoverMutation = useMutation<
-    BecknActionResponse,
-    Error,
-    BecknDiscoverBody
-  >({
-    mutationFn: mutate(ccnReferralRoutes.discover, { silent: true }),
-    onMutate: () => setTransactionId(undefined),
-    onSuccess: (response) => {
-      setTransactionId(response.transaction_id);
-      setStartedAt(Date.now());
-    },
-  });
-  const { mutate: runDiscover } = discoverMutation;
+  // Plain state, not `useMutation`: discover starts from a mount effect, and
+  // React's dev double-mount detaches a mutation observer from the request
+  // in flight, which then stays "pending" forever.
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState(false);
+  const discoverRun = useRef(0);
+  const runDiscover = useCallback((body: BecknDiscoverBody) => {
+    const run = ++discoverRun.current;
+    setTransactionId(undefined);
+    setDiscovering(true);
+    setDiscoverError(false);
+    request(ccnReferralRoutes.discover, { body, silent: true }).then(
+      (response) => {
+        if (run !== discoverRun.current) return;
+        setTransactionId(response.transaction_id);
+        setStartedAt(Date.now());
+        setDiscovering(false);
+      },
+      () => {
+        if (run !== discoverRun.current) return;
+        setDiscovering(false);
+        setDiscoverError(true);
+      },
+    );
+  }, []);
   const discover = (textSearch: string) => {
     const text = textSearch.trim();
     runDiscover(text ? { text_search: text } : {});
@@ -153,6 +164,14 @@ export function NetworkDestinationSearch({
   const providers = groupNetworkOffers(
     extractNetworkOffers(messagesQuery.data?.results ?? []),
   );
+  // Typing narrows the providers that already answered; Search asks the
+  // network again with the text.
+  const visibleProviders = providers.filter(
+    (provider) =>
+      networkProviderMatches(provider, search) ||
+      provider.key ===
+        (providerKey ?? (selected && networkProviderKey(selected))),
+  );
   const activeProviderKey =
     providerKey ?? (selected ? networkProviderKey(selected) : undefined);
   const activeProvider = providers.find(
@@ -166,7 +185,7 @@ export function NetworkDestinationSearch({
       ? networkOfferValue(selected)
       : "";
   const searching =
-    discoverMutation.isPending ||
+    discovering ||
     (!!transactionId && !responded && !timedOut && !transactionQuery.isError);
 
   const pickProvider = (key: string) => {
@@ -202,11 +221,7 @@ export function NetworkDestinationSearch({
               placeholder={t("ccn_network_search_placeholder")}
             />
           </Field>
-          <Button
-            type="submit"
-            variant="outline"
-            disabled={discoverMutation.isPending}
-          >
+          <Button type="submit" variant="outline" disabled={discovering}>
             {searching ? (
               <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
             ) : (
@@ -226,7 +241,7 @@ export function NetworkDestinationSearch({
             {t("ccn_searching_network")}
           </p>
         )}
-        {(discoverMutation.isError || transactionQuery.isError) && (
+        {(discoverError || transactionQuery.isError) && (
           <FieldError>{t("ccn_network_unavailable")}</FieldError>
         )}
         {failed && (
@@ -251,14 +266,19 @@ export function NetworkDestinationSearch({
               {t("ccn_no_network_providers")}
             </p>
           )}
+        {providers.length > 0 && !visibleProviders.length && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {t("ccn_no_matching_providers", { search: search.trim() })}
+          </p>
+        )}
       </div>
-      {providers.length > 0 && (
+      {visibleProviders.length > 0 && (
         <div
           role="radiogroup"
           aria-label={t("ccn_network_providers")}
           className="grid gap-2 sm:grid-cols-2"
         >
-          {providers.map((provider) => {
+          {visibleProviders.map((provider) => {
             const isActive = provider.key === activeProvider?.key;
             return (
               <button

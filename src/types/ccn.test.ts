@@ -11,6 +11,7 @@ import {
   isSameNetworkOffer,
   networkOfferLabel,
   networkOfferReferralType,
+  networkProviderMatches,
   networkReferralBody,
   networkRequestForms,
   networkSelectBody,
@@ -399,4 +400,24 @@ test("select sends the offer with its catalog's routing", () => {
       bpp_uri: "https://medicity/bpp",
     },
   });
+});
+
+test("networkProviderMatches looks at provider, network and service names", () => {
+  const provider = {
+    key: "p",
+    name: "Saic General Hospital",
+    bppId: "cnn-beck-bpp.ohc.network",
+    offers: [
+      {
+        offerName: "Cardiology referrals",
+        organizationName: "Heart Unit",
+      },
+    ],
+  } as unknown as Parameters<typeof networkProviderMatches>[0];
+  assert.equal(networkProviderMatches(provider, ""), true);
+  assert.equal(networkProviderMatches(provider, "  saic "), true);
+  assert.equal(networkProviderMatches(provider, "BECK-BPP"), true);
+  assert.equal(networkProviderMatches(provider, "cardio"), true);
+  assert.equal(networkProviderMatches(provider, "heart"), true);
+  assert.equal(networkProviderMatches(provider, "bogura"), false);
 });

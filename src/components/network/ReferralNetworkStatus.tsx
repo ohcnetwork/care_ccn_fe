@@ -32,7 +32,7 @@ const SYNC_REFRESH_DELAYS_MS = [0, 2000, 5000];
  * status change, a reply, a linked file): CARE refetches its `referrals`
  * queries after every such edit, and the backend then syncs it to the network.
  */
-function useRefreshAfterReferralEdits(enabled: boolean) {
+export function useRefreshAfterReferralEdits(enabled: boolean) {
   const client = useQueryClient();
   useEffect(() => {
     if (!enabled) return;
@@ -84,7 +84,6 @@ export function ReferralNetworkStatus({
 }) {
   const { t } = useTranslation();
   const isNetwork = useIsNetworkReferral(referral.availability);
-  useRefreshAfterReferralEdits(isNetwork);
   const transactionQuery = useQuery<ReferralTransactionRetrieve>({
     queryKey: ["ccn", "referral", "transaction", transactionId],
     queryFn: query(ccnReferralRoutes.get, {

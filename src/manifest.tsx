@@ -1,7 +1,9 @@
 import { Network } from "lucide-react";
 import { lazy } from "react";
 
-import { networkReferralDestination } from "@/components/network/networkDestination";
+import { CreateReferralDialogOverride } from "@/components/overrides/CreateReferralDialogOverride";
+import { ReferralDestinationPickerOverride } from "@/components/overrides/ReferralDestinationPickerOverride";
+import { ReferralStatusBadgeOverride } from "@/components/overrides/ReferralStatusBadgeOverride";
 
 import "@/index.css";
 import type { PluginNavigationLink } from "@/pluginContract";
@@ -16,22 +18,42 @@ const navItems: PluginNavigationLink[] = [
   },
 ];
 
+/**
+ * Uses only CARE's existing plugin points: routes, a facility nav item, the
+ * `EncounterActions` / `PatientInfoCardActions` slots and overrides of
+ * `CreateReferralDialog`, `ReferralDestinationPicker` and
+ * `ReferralStatusBadge` (active when CARE is built with
+ * `REACT_MFE_REGISTERED_COMPONENTS=CreateReferralDialog,ReferralDestinationPicker,ReferralStatusBadge`).
+ */
 const manifest = {
   plugin: "care_ccn_fe",
   routes,
   navItems,
   components: {
-    ReferralStatusExtras: lazy(
-      () => import("@/components/pluggables/ReferralStatusExtras"),
+    EncounterActions: lazy(
+      () => import("@/components/pluggables/EncounterActions"),
     ),
-    ReferralDetailsSidebar: lazy(
-      () => import("@/components/pluggables/ReferralDetailsSidebar"),
-    ),
-    ReferralSharedRecordBadges: lazy(
-      () => import("@/components/pluggables/ReferralSharedRecordBadges"),
+    PatientInfoCardActions: lazy(
+      () => import("@/components/pluggables/PatientInfoCardActions"),
     ),
   },
-  referralDestinations: [networkReferralDestination],
+  overrides: [
+    {
+      component: "CreateReferralDialog",
+      replacement: CreateReferralDialogOverride,
+      description: "Runs the CCN network referral workflow in the dialog",
+    },
+    {
+      component: "ReferralDestinationPicker",
+      replacement: ReferralDestinationPickerOverride,
+      description: "Adds the Network (CCN) destination type",
+    },
+    {
+      component: "ReferralStatusBadge",
+      replacement: ReferralStatusBadgeOverride,
+      description: "Marks referrals sent over the CCN network",
+    },
+  ],
 } as const;
 
 export default manifest;

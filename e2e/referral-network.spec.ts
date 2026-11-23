@@ -1,10 +1,6 @@
 import { faker } from "@faker-js/faker";
-import { type Page, expect, test } from "@playwright/test";
-import {
-  adminApiHeaders,
-  apiBaseUrl,
-  questionBlock,
-} from "tests/helper/questionnaireV2";
+import { expect, test } from "@playwright/test";
+import { adminApiHeaders, apiBaseUrl } from "tests/helper/questionnaireV2";
 import { createReferralFixture } from "tests/helper/referrals";
 
 test.use({ storageState: "tests/.auth/user.json" });
@@ -53,29 +49,7 @@ function transaction(
   };
 }
 
-/** Make the fixture's availability a network (Beckn) availability. */
-async function markAvailabilityAsNetwork(page: Page, availabilityId: string) {
-  await page.route(
-    new RegExp(`/api/v1/referral_availability/${availabilityId}/$`),
-    async (route) => {
-      const response = await route.fetch();
-      const body = await response.json();
-      await route.fulfill({
-        response,
-        json: {
-          ...body,
-          entity_type: "external",
-          facility: null,
-          external_entity: {
-            beckn: { bppId: "cc.bpp", bppUri: "https://cc.example/bpp" },
-          },
-        },
-      });
-    },
-  );
-}
-
-test("sends a referral through the CCN network and shows its network status", async ({
+test("sends a referral to a network organization from the encounter", async ({
   page,
   request,
 }) => {
@@ -107,8 +81,6 @@ test("sends a referral through the CCN network and shows its network status", as
   let initBody: Record<string, unknown> | undefined;
   let confirmBody: Record<string, unknown> | undefined;
   let status = "ON_DISCOVER";
-
-  await markAvailabilityAsNetwork(page, fixture.availabilityId);
   await page.route(CCN, async (route) => {
     const url = new URL(route.request().url());
     const method = route.request().method();
@@ -267,12 +239,18 @@ test("sends a referral through the CCN network and shows its network status", as
   });
 
   await test.step("Pick a provider discovered on the network", async () => {
+    // The app's `EncounterActions` slot opens its network referral page.
     await page.goto(
-      `/facility/${fixture.facilityId}/patient/${fixture.patientId}/encounter/${fixture.encounterId}/referrals`,
+      `/facility/${fixture.facilityId}/patient/${fixture.patientId}/encounter/${fixture.encounterId}/updates`,
     );
-    await page.getByRole("button", { name: "New Referral" }).click();
-    await page.getByRole("combobox", { name: "Refer to" }).click();
-    await page.getByRole("option", { name: "Organizations" }).click();
+    await page
+      .getByRole("link", { name: "Refer via network" })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "New network referral" }),
+    ).toBeVisible();
     await page.getByRole("radio", { name: new RegExp(offerName) }).click();
     await page.getByRole("combobox", { name: "Referral service" }).click();
     await expect(page.getByRole("option")).toHaveCount(2);
@@ -283,7 +261,7 @@ test("sends a referral through the CCN network and shows its network status", as
       .getByRole("option", { name: /Consultation.*Referral unit/ })
       .click();
     await expect(
-      page.getByRole("region", { name: "Destination" }),
+      page.getByRole("region", { name: "Organization" }),
     ).toContainText(`${offerName} — Consultation`);
     await expect(
       page.getByRole("textbox", { name: "Referral title" }),
@@ -294,9 +272,7 @@ test("sends a referral through the CCN network and shows its network status", as
     await page.getByRole("textbox", { name: "Referral title" }).fill(title);
     await page.getByRole("combobox", { name: "Urgency" }).click();
     await page.getByRole("option", { name: "Urgent" }).click();
-    await questionBlock(page, "Referral reason")
-      .getByRole("textbox")
-      .fill(answer);
+    await page.getByRole("textbox", { name: "Referral reason" }).fill(answer);
     await page.getByRole("button", { name: "Review referral" }).click();
     await expect(page.getByText("Urgency: Urgent")).toBeVisible();
     await expect(
@@ -344,20 +320,13 @@ test("sends a referral through the CCN network and shows its network status", as
     expect(initBody).toEqual(confirmBody);
   });
 
-  await test.step("Network referrals are marked in the list and details", async () => {
-    const row = page
-      .locator("[data-cy='referral-row']")
-      .filter({ hasText: fixture.title });
+  await test.step("The referral created at this facility opens in CARE", async () => {
+    await expect(page).toHaveURL(
+      new RegExp(`/referrals/${fixture.referralId}`),
+    );
     await expect(
-      row.locator("[data-cy='referral-network-badge']"),
+      page.getByRole("heading", { name: fixture.title }),
     ).toBeVisible();
-    await page.goto(fixture.path);
-    await expect(
-      page.locator("[data-cy='referral-network-badge']").first(),
-    ).toBeVisible();
-    const status = page.locator("[data-cy='referral-network-status']");
-    await expect(status).toContainText("Confirmed");
-    await expect(status).toContainText("cc.bpp");
   });
 });
 
@@ -368,8 +337,6 @@ test("lists outgoing and incoming network transactions", async ({
   const fixture = await createReferralFixture(request);
   const outgoingId = faker.string.uuid();
   const incomingId = faker.string.uuid();
-
-  await markAvailabilityAsNetwork(page, fixture.availabilityId);
   await page.route(CCN, async (route) => {
     const { pathname } = new URL(route.request().url());
     const list = (item: unknown) => json({ count: 1, results: [item] });
@@ -414,6 +381,6 @@ test("lists outgoing and incoming network transactions", async ({
   await page.locator("[data-cy='ccn-open-referral']").click();
   await expect(page).toHaveURL(new RegExp(`/referrals/${fixture.referralId}`));
   await expect(
-    page.locator("[data-cy='referral-network-status']"),
-  ).toContainText("Confirmed");
+    page.getByRole("heading", { name: fixture.title }),
+  ).toBeVisible();
 });
