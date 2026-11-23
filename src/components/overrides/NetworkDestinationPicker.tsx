@@ -88,8 +88,9 @@ export default function NetworkDestinationPicker({
     setType(value);
   };
 
-  // A network referral is sent from a facility, for a known patient.
-  const networkAvailable = !!facilityId && !!patientId;
+  // A network referral needs a known patient. Without a facility (the patient
+  // profile) it is a generic referral, linked only to the patient.
+  const networkAvailable = !!patientId;
   useEffect(() => {
     if (dialog || type !== NETWORK || !facilityId || !patientId) return;
     void navigate({
@@ -146,7 +147,7 @@ export default function NetworkDestinationPicker({
             selected={selected?.entity_type === type ? selected : null}
             onSelect={onSelect}
           />
-        ) : inPlace && dialog && facilityId && patientId ? (
+        ) : inPlace && dialog && patientId ? (
           <NetworkReferralWorkflow
             embedded
             facilityId={facilityId}

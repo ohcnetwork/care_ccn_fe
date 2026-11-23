@@ -147,7 +147,8 @@ function OrganizationSummary({
 }
 
 export interface NetworkReferralWorkflowProps {
-  facilityId: string;
+  /** The sending facility; none for a generic referral linked only to the patient. */
+  facilityId?: string;
   patientId: string;
   encounterId?: string;
   /** Leaves the workflow from the edit step (the Cancel button). */

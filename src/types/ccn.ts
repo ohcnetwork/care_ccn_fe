@@ -148,13 +148,14 @@ export type ReferralNetworkCategory = "patient_care" | "other";
 
 /**
  * `facility` is the origin Care facility the plugin creates the referral from.
+ * Without it the referral is generic and linked only to the patient.
  * `encounter` links the origin referral to that encounter; it stays in Care and
  * is never sent over the network. `questionnaire` / `questionnaire_response`
  * answer the selected availability's request form; they are required when it
  * has one. The same body is used for `init` (validation only) and `confirm`.
  */
 export interface ReferralConfirmBody extends BecknActionBody {
-  facility: string;
+  facility?: string;
   patient?: string;
   patient_name?: string;
   encounter?: string;
@@ -495,7 +496,8 @@ const URGENCY_PRIORITY: Record<ReferralUrgency, number> = {
 export interface NetworkReferralBodyInput {
   /** The availability the BPP answered `select` with; none for a coordination desk. */
   availability?: NetworkReferralAvailability | null;
-  facilityId: string;
+  /** The sending facility; none for a generic referral from the patient profile. */
+  facilityId?: string;
   patientId: string;
   encounterId?: string;
   title: string;
@@ -525,7 +527,7 @@ export function networkReferralBody(
       ? undefined
       : CATEGORY_FOR_REFERRAL[request.referralType];
   return {
-    facility: request.facilityId,
+    ...(request.facilityId ? { facility: request.facilityId } : {}),
     patient: request.patientId,
     ...(request.encounterId ? { encounter: request.encounterId } : {}),
     title: request.title,

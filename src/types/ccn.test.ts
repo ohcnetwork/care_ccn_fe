@@ -421,3 +421,14 @@ test("networkProviderMatches looks at provider, network and service names", () =
   assert.equal(networkProviderMatches(provider, "heart"), true);
   assert.equal(networkProviderMatches(provider, "bogura"), false);
 });
+
+test("a referral from the patient profile is sent without a facility", () => {
+  const body = networkReferralBody({
+    patientId: "patient",
+    title: "Generic",
+    reason: "",
+    urgency: "routine",
+  });
+  assert.equal("facility" in body, false);
+  assert.equal(body.patient, "patient");
+});
