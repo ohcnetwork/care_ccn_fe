@@ -330,17 +330,20 @@ test("sends a referral to a network organization from the encounter", async ({
   });
 });
 
-test("lists outgoing and incoming network transactions", async ({
+test("shows recent network transactions and explores them", async ({
   page,
   request,
 }) => {
   const fixture = await createReferralFixture(request);
   const outgoingId = faker.string.uuid();
   const incomingId = faker.string.uuid();
+  const listQueries: URLSearchParams[] = [];
   await page.route(CCN, async (route) => {
-    const { pathname } = new URL(route.request().url());
+    const url = new URL(route.request().url());
+    const { pathname } = url;
     const list = (item: unknown) => json({ count: 1, results: [item] });
     if (pathname.endsWith("/bap/referral/")) {
+      listQueries.push(url.searchParams);
       return route.fulfill(list(transaction(outgoingId, "ON_CONFIRM")));
     }
     if (pathname.endsWith("/bpp/referral/")) {
@@ -357,8 +360,35 @@ test("lists outgoing and incoming network transactions", async ({
         ),
       );
     }
-    if (pathname.endsWith(`/bap/referral/${fixture.referralId}/`)) {
-      return route.fulfill(json({ errors: [{ msg: "not found" }] }, 404));
+    if (pathname.endsWith(`/bpp/referral/${incomingId}/`)) {
+      return route.fulfill(
+        json({ ...transaction(incomingId, "NACK"), adapter: "bpp" }),
+      );
+    }
+    if (pathname.endsWith("/bap/message/")) {
+      return route.fulfill(
+        json({
+          count: 1,
+          results: [
+            {
+              id: 1,
+              transaction_id: outgoingId,
+              message_id: faker.string.uuid(),
+              action: "on_confirm",
+              direction: "in",
+              delivery_status: "",
+              processing_status: "processed",
+              attempts: 1,
+              last_error: "",
+              payload: { context: { action: "on_confirm" }, message: {} },
+              ack: null,
+              reply_to: null,
+              created_date: new Date().toISOString(),
+              modified_date: new Date().toISOString(),
+            },
+          ],
+        }),
+      );
     }
     if (pathname.endsWith("/message/")) {
       return route.fulfill(json({ count: 0, results: [] }));
@@ -366,21 +396,50 @@ test("lists outgoing and incoming network transactions", async ({
     return route.fulfill(json({ errors: [{ msg: "unexpected" }] }, 404));
   });
 
-  await page.goto("/admin/network_referrals");
   const rows = page.locator("[data-cy='ccn-transaction-row']");
-  await expect(rows).toHaveCount(1);
-  await expect(rows.first()).toContainText(outgoingId);
-  await expect(rows.first()).toContainText("Confirmed");
 
-  await page.getByRole("tab", { name: "Incoming" }).click();
-  await expect(rows.first()).toContainText(incomingId);
-  await expect(rows.first()).toContainText("Failed");
+  await test.step("The dashboard lists both directions together", async () => {
+    await page.goto("/admin/network_referrals");
+    await expect(rows).toHaveCount(2);
+    await expect(page.getByText(outgoingId)).toBeVisible();
+    await expect(page.getByText(incomingId)).toBeVisible();
+    const outgoingRow = rows.filter({ hasText: outgoingId });
+    await expect(outgoingRow).toContainText("Confirmed");
+    await expect(outgoingRow).toContainText("ON_CONFIRM");
+    // The summary is read-only: details open in the developer explorer only.
+    await expect(page.getByRole("button", { name: outgoingId })).toHaveCount(0);
+  });
 
-  await page.getByRole("tab", { name: "Outgoing" }).click();
-  await page.getByRole("button", { name: outgoingId }).click();
-  await page.locator("[data-cy='ccn-open-referral']").click();
-  await expect(page).toHaveURL(new RegExp(`/referrals/${fixture.referralId}`));
-  await expect(
-    page.getByRole("heading", { name: fixture.title }),
-  ).toBeVisible();
+  await test.step("The explorer filters by direction and transaction id", async () => {
+    await page.locator("[data-cy='ccn-open-explorer']").click();
+    await expect(page).toHaveURL(/\/admin\/network_referrals\/explorer/);
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText(outgoingId);
+
+    await page.getByRole("tab", { name: "Inbound" }).click();
+    await expect(rows.first()).toContainText(incomingId);
+    await expect(rows.first()).toContainText("Failed");
+
+    await page.getByRole("tab", { name: "Outbound" }).click();
+    await page
+      .locator("[data-cy='ccn-filter-transaction-id']")
+      .fill(outgoingId);
+    await expect
+      .poll(() => listQueries.at(-1)?.get("transaction_id"))
+      .toBe(outgoingId);
+  });
+
+  await test.step("A row opens its response logs and referral", async () => {
+    await page.getByRole("button", { name: outgoingId }).click();
+    await expect(page.locator("[data-cy='ccn-response-logs']")).toContainText(
+      "ON_CONFIRM",
+    );
+    await page.locator("[data-cy='ccn-open-referral']").click();
+    await expect(page).toHaveURL(
+      new RegExp(`/referrals/${fixture.referralId}`),
+    );
+    await expect(
+      page.getByRole("heading", { name: fixture.title }),
+    ).toBeVisible();
+  });
 });

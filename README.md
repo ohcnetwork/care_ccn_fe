@@ -44,9 +44,19 @@ It adds:
   (`select` → `init` → `confirm`). The referral created at this facility then
   opens on CARE's referral page. The page and the dialog share
   `src/components/network/NetworkReferralWorkflow.tsx`.
-- **Network referrals** page at `/admin/network_referrals`, linked from the
-  admin dashboard sidebar (outgoing and incoming network transactions). It is
-  not in the facility nav; CARE's own Referrals page covers day-to-day use.
+- **Network referrals** dashboard at `/admin/network_referrals`, linked from
+  the admin dashboard sidebar: totals per direction and a read-only table of
+  the latest 20 transactions (outbound and inbound together) with their
+  transaction and referral status. It is not in the facility nav; CARE's own
+  Referrals page covers day-to-day use.
+- **Developer explorer** at `/admin/network_referrals/explorer`, the only
+  place a transaction's details open: every transaction, outbound (BAP) or
+  inbound (BPP), filtered by transaction ID and status (kept in the URL), with
+  its response status. A row opens its details, its linked referral and its
+  response logs (each request and callback with its delivery or processing
+  status, ack, error and payload). It has a console skin, dark by default with
+  a light mode (`.ccn-console` in `src/index.css`, after care-abdm's
+  developer explorer); the choice is remembered in the browser.
 
 CARE's questionnaire engine is not available to an app, so the request form is
 rendered by `src/components/network/form/`. It covers the types request forms
