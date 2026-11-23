@@ -3,6 +3,8 @@ import { ArrowLeft, ArrowRight, Network, RefreshCw } from "lucide-react";
 import {
   type ReactNode,
   type RefObject,
+  createContext,
+  useContext,
   useEffect,
   useId,
   useRef,
@@ -72,6 +74,9 @@ function offerKey(offer: NetworkOffer) {
   return `${offer.transactionId}|${offer.context.bpp_uri}|${networkOfferLabel(offer)}`;
 }
 
+/** In CARE's dialog the workflow sits inside CARE's destination section. */
+const EmbeddedContext = createContext(false);
+
 function Section({
   number,
   title,
@@ -81,10 +86,15 @@ function Section({
   title: string;
   children: ReactNode;
 }) {
+  const embedded = useContext(EmbeddedContext);
   return (
     <section
       aria-label={title}
-      className="space-y-4 rounded-xl border border-border bg-muted/30 p-4"
+      className={
+        embedded
+          ? "space-y-4 border-t border-border pt-4"
+          : "space-y-4 rounded-xl border border-border bg-muted/30 p-4"
+      }
     >
       <h2 className="flex items-center gap-2 text-sm font-semibold">
         <span aria-hidden className="h-4 w-1 rounded-full bg-primary" />
@@ -148,6 +158,11 @@ export interface NetworkReferralWorkflowProps {
   scrollRef?: RefObject<HTMLElement | null>;
   /** Shown first in the destination section, e.g. the destination type. */
   destinationControl?: ReactNode;
+  /**
+   * Rendered inside CARE's New Referral dialog, in its destination section:
+   * no page heading, flat sections, and the actions below the form.
+   */
+  embedded?: boolean;
 }
 
 /**
@@ -164,6 +179,7 @@ export function NetworkReferralWorkflow({
   onSent,
   scrollRef,
   destinationControl,
+  embedded = false,
 }: NetworkReferralWorkflowProps) {
   const { t } = useTranslation();
   const id = useId();
@@ -265,7 +281,11 @@ export function NetworkReferralWorkflow({
   const moveTo = (next: "edit" | "review") => {
     setStep(next);
     requestAnimationFrame(() => {
-      (scrollRef?.current ?? window).scrollTo({ top: 0 });
+      if (embedded) {
+        headingRef.current?.scrollIntoView({ block: "start" });
+      } else {
+        (scrollRef?.current ?? window).scrollTo({ top: 0 });
+      }
       headingRef.current?.focus({ preventScroll: true });
     });
   };
@@ -292,292 +312,334 @@ export function NetworkReferralWorkflow({
     moveTo("review");
   };
 
+  const actions = (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        disabled={sendMutation.isPending}
+        onClick={() => (step === "edit" ? onCancel() : moveTo("edit"))}
+      >
+        {step === "review" && <ArrowLeft className="size-4" />}
+        {t(step === "review" ? "ccn_back_to_editing" : "cancel")}
+      </Button>
+      {step === "edit" ? (
+        <Button
+          type="button"
+          disabled={!canReview}
+          onClick={review}
+          data-cy="ccn-review-referral"
+        >
+          {t("ccn_review")}
+          <ArrowRight className="size-4" />
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          disabled={sendMutation.isPending}
+          onClick={() => sendMutation.mutate()}
+          data-cy="ccn-send-referral"
+        >
+          {sendMutation.isPending && (
+            <Spinner className="size-4 animate-spin" />
+          )}
+          {t(
+            progress
+              ? `ccn_sending_${progress}`
+              : sendMutation.isPending
+                ? "ccn_sending"
+                : "ccn_send_referral",
+          )}
+          <ArrowRight className="size-4" />
+        </Button>
+      )}
+    </div>
+  );
+
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 px-3 pb-10 md:px-0">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div ref={headingRef} tabIndex={-1} className="space-y-1 outline-none">
-          <PageTitle>
-            {t(
-              step === "review"
-                ? "ccn_review_network_referral"
-                : "ccn_new_network_referral",
+    <EmbeddedContext.Provider value={embedded}>
+      <div
+        ref={embedded ? headingRef : undefined}
+        tabIndex={embedded ? -1 : undefined}
+        className={
+          embedded
+            ? "space-y-6 outline-none"
+            : "mx-auto w-full max-w-5xl space-y-6 px-3 pb-10 md:px-0"
+        }
+      >
+        {!embedded && (
+          <header className="flex flex-wrap items-start justify-between gap-3">
+            <div
+              ref={headingRef}
+              tabIndex={-1}
+              className="space-y-1 outline-none"
+            >
+              <PageTitle>
+                {t(
+                  step === "review"
+                    ? "ccn_review_network_referral"
+                    : "ccn_new_network_referral",
+                )}
+              </PageTitle>
+              <Muted>
+                {patientQuery.data?.name
+                  ? t("ccn_network_referral_for", {
+                      name: patientQuery.data.name,
+                    })
+                  : t("ccn_network_referral_create_description")}
+              </Muted>
+            </div>
+            {actions}
+          </header>
+        )}
+
+        <div className="space-y-6" hidden={step !== "edit"}>
+          <DestinationSection embedded={embedded} title={t("ccn_organization")}>
+            {destinationControl}
+            {offer && !choosing ? (
+              <div className="flex items-start justify-between gap-3">
+                <OrganizationSummary
+                  offer={offer}
+                  description={availability?.description}
+                  referralType={referralType}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setChoosing(true)}
+                >
+                  {t("ccn_change_organization")}
+                </Button>
+              </div>
+            ) : (
+              <NetworkDestinationSearch
+                selected={offer}
+                onSelect={(next, options) => pickOffer(next, options?.auto)}
+                rediscoverKey={rediscoverKey}
+              />
             )}
-          </PageTitle>
-          <Muted>
-            {patientQuery.data?.name
-              ? t("ccn_network_referral_for", {
-                  name: patientQuery.data.name,
-                })
-              : t("ccn_network_referral_create_description")}
-          </Muted>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={sendMutation.isPending}
-            onClick={() => (step === "edit" ? onCancel() : moveTo("edit"))}
-          >
-            {step === "review" && <ArrowLeft className="size-4" />}
-            {t(step === "review" ? "ccn_back_to_editing" : "cancel")}
-          </Button>
-          {step === "edit" ? (
-            <Button
-              type="button"
-              disabled={!canReview}
-              onClick={review}
-              data-cy="ccn-review-referral"
-            >
-              {t("ccn_review")}
-              <ArrowRight className="size-4" />
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              disabled={sendMutation.isPending}
-              onClick={() => sendMutation.mutate()}
-              data-cy="ccn-send-referral"
-            >
-              {sendMutation.isPending && (
-                <Spinner className="size-4 animate-spin" />
+            {offer && choosing && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setChoosing(false)}
+              >
+                {t("ccn_use_selected_organization")}
+              </Button>
+            )}
+          </DestinationSection>
+
+          <Section number={2} title={t("ccn_reason")}>
+            <Field>
+              <FieldLabel htmlFor={`${id}-title`}>
+                {t("ccn_referral_title")}
+              </FieldLabel>
+              <Input
+                id={`${id}-title`}
+                value={title}
+                maxLength={255}
+                placeholder={t("ccn_referral_title_placeholder")}
+                onChange={(event) => {
+                  setTitle(event.target.value);
+                  setTitleEdited(true);
+                }}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`${id}-note`}>
+                {t("ccn_referral_note")}
+              </FieldLabel>
+              <textarea
+                id={`${id}-note`}
+                className={TEXTAREA_CLASS}
+                value={note}
+                rows={3}
+                placeholder={t("ccn_referral_note_placeholder")}
+                onChange={(event) => setNote(event.target.value)}
+              />
+            </Field>
+            <Field className="max-w-xs">
+              <FieldLabel htmlFor={`${id}-urgency`}>
+                {t("ccn_urgency")}
+              </FieldLabel>
+              <Select
+                value={urgency}
+                onValueChange={(value) => setUrgency(value as ReferralUrgency)}
+              >
+                <SelectTrigger id={`${id}-urgency`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {REFERRAL_URGENCIES.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {t(`ccn_urgency__${item}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Muted>{t("ccn_network_referral_description")}</Muted>
+          </Section>
+
+          {offer && needsForm && (
+            <Section number={3} title={t("ccn_request_form")}>
+              {resolveQuery.isPending ? (
+                <p
+                  role="status"
+                  className="flex items-center gap-2 py-4 text-sm text-muted-foreground"
+                >
+                  <Spinner className="size-4 animate-spin" />
+                  {t("ccn_loading_network_form")}
+                </p>
+              ) : resolveQuery.isError ? (
+                <div className="space-y-2">
+                  <FieldError>
+                    {t(describeNetworkError(resolveQuery.error).key, {
+                      ...describeNetworkError(resolveQuery.error).values,
+                    })}
+                  </FieldError>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => resolveQuery.refetch()}
+                  >
+                    <RefreshCw className="size-4" />
+                    {t("ccn_reload_forms")}
+                  </Button>
+                </div>
+              ) : !form ? (
+                <Muted>{t("ccn_network_no_request_form")}</Muted>
+              ) : (
+                <div className="space-y-4">
+                  {forms.length > 1 && (
+                    <Field className="max-w-md">
+                      <FieldLabel htmlFor={`${id}-form`}>
+                        {t("ccn_request_form")}
+                      </FieldLabel>
+                      <Select value={form.id} onValueChange={setFormId}>
+                        <SelectTrigger id={`${id}-form`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {forms.map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  )}
+                  <p className="text-sm font-semibold">{form.title}</p>
+                  {unsupported.length ? (
+                    <FieldError>{t("ccn_form_unsupported")}</FieldError>
+                  ) : (
+                    <>
+                      {formErrors.length > 0 && (
+                        <FieldError>{t("ccn_form_check_answers")}</FieldError>
+                      )}
+                      <NetworkRequestForm
+                        idPrefix={id}
+                        questions={questions}
+                        answers={answers}
+                        onChange={setAnswers}
+                        errors={formErrors}
+                      />
+                    </>
+                  )}
+                </div>
               )}
-              {t(
-                progress
-                  ? `ccn_sending_${progress}`
-                  : sendMutation.isPending
-                    ? "ccn_sending"
-                    : "ccn_send_referral",
-              )}
-              <ArrowRight className="size-4" />
-            </Button>
+            </Section>
           )}
         </div>
-      </header>
 
-      <div className="space-y-6" hidden={step !== "edit"}>
-        <Section number={1} title={t("ccn_organization")}>
-          {destinationControl}
-          {offer && !choosing ? (
-            <div className="flex items-start justify-between gap-3">
+        {step === "review" && offer && (
+          <div className="space-y-6">
+            <Section title={t("ccn_organization")}>
               <OrganizationSummary
                 offer={offer}
                 description={availability?.description}
                 referralType={referralType}
               />
+            </Section>
+            <Section title={t("ccn_reason")}>
+              <p className="text-base font-semibold">{title}</p>
+              {note && <p className="whitespace-pre-wrap text-sm">{note}</p>}
+              <p className="text-sm">
+                {t("ccn_urgency")}: {t(`ccn_urgency__${urgency}`)}
+              </p>
+            </Section>
+            {form && (
+              <Section title={form.title}>
+                <NetworkRequestAnswers
+                  questions={questions}
+                  answers={answers}
+                />
+              </Section>
+            )}
+          </div>
+        )}
+
+        {sendError && (
+          <div
+            role="alert"
+            className="space-y-2 rounded-lg border border-destructive/30 p-4"
+          >
+            <FieldError>{t(sendError.key, { ...sendError.values })}</FieldError>
+            {sendError.recovery === "resolve" && (
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => setChoosing(true)}
+                onClick={() => {
+                  sendMutation.reset();
+                  void resolveQuery.refetch();
+                  moveTo("edit");
+                }}
               >
-                {t("ccn_change_organization")}
+                {t("ccn_reload_forms")}
               </Button>
-            </div>
-          ) : (
-            <NetworkDestinationSearch
-              selected={offer}
-              onSelect={(next, options) => pickOffer(next, options?.auto)}
-              rediscoverKey={rediscoverKey}
-            />
-          )}
-          {offer && choosing && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setChoosing(false)}
-            >
-              {t("ccn_use_selected_organization")}
-            </Button>
-          )}
-        </Section>
-
-        <Section number={2} title={t("ccn_reason")}>
-          <Field>
-            <FieldLabel htmlFor={`${id}-title`}>
-              {t("ccn_referral_title")}
-            </FieldLabel>
-            <Input
-              id={`${id}-title`}
-              value={title}
-              maxLength={255}
-              placeholder={t("ccn_referral_title_placeholder")}
-              onChange={(event) => {
-                setTitle(event.target.value);
-                setTitleEdited(true);
-              }}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${id}-note`}>
-              {t("ccn_referral_note")}
-            </FieldLabel>
-            <textarea
-              id={`${id}-note`}
-              className={TEXTAREA_CLASS}
-              value={note}
-              rows={3}
-              placeholder={t("ccn_referral_note_placeholder")}
-              onChange={(event) => setNote(event.target.value)}
-            />
-          </Field>
-          <Field className="max-w-xs">
-            <FieldLabel htmlFor={`${id}-urgency`}>
-              {t("ccn_urgency")}
-            </FieldLabel>
-            <Select
-              value={urgency}
-              onValueChange={(value) => setUrgency(value as ReferralUrgency)}
-            >
-              <SelectTrigger id={`${id}-urgency`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {REFERRAL_URGENCIES.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {t(`ccn_urgency__${item}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Muted>{t("ccn_network_referral_description")}</Muted>
-        </Section>
-
-        {offer && needsForm && (
-          <Section number={3} title={t("ccn_request_form")}>
-            {resolveQuery.isPending ? (
-              <p
-                role="status"
-                className="flex items-center gap-2 py-4 text-sm text-muted-foreground"
-              >
-                <Spinner className="size-4 animate-spin" />
-                {t("ccn_loading_network_form")}
-              </p>
-            ) : resolveQuery.isError ? (
-              <div className="space-y-2">
-                <FieldError>
-                  {t(describeNetworkError(resolveQuery.error).key, {
-                    ...describeNetworkError(resolveQuery.error).values,
-                  })}
-                </FieldError>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => resolveQuery.refetch()}
-                >
-                  <RefreshCw className="size-4" />
-                  {t("ccn_reload_forms")}
-                </Button>
-              </div>
-            ) : !form ? (
-              <Muted>{t("ccn_network_no_request_form")}</Muted>
-            ) : (
-              <div className="space-y-4">
-                {forms.length > 1 && (
-                  <Field className="max-w-md">
-                    <FieldLabel htmlFor={`${id}-form`}>
-                      {t("ccn_request_form")}
-                    </FieldLabel>
-                    <Select value={form.id} onValueChange={setFormId}>
-                      <SelectTrigger id={`${id}-form`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {forms.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                )}
-                <p className="text-sm font-semibold">{form.title}</p>
-                {unsupported.length ? (
-                  <FieldError>{t("ccn_form_unsupported")}</FieldError>
-                ) : (
-                  <>
-                    {formErrors.length > 0 && (
-                      <FieldError>{t("ccn_form_check_answers")}</FieldError>
-                    )}
-                    <NetworkRequestForm
-                      idPrefix={id}
-                      questions={questions}
-                      answers={answers}
-                      onChange={setAnswers}
-                      errors={formErrors}
-                    />
-                  </>
-                )}
-              </div>
             )}
-          </Section>
+            {sendError.recovery === "reselect" && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  pickOffer(null);
+                  setChoosing(true);
+                  setRediscoverKey((key) => key + 1);
+                  moveTo("edit");
+                }}
+              >
+                {t("ccn_choose_another_organization")}
+              </Button>
+            )}
+          </div>
         )}
+        {embedded && <div className="flex justify-end">{actions}</div>}
       </div>
+    </EmbeddedContext.Provider>
+  );
+}
 
-      {step === "review" && offer && (
-        <div className="space-y-6">
-          <Section title={t("ccn_organization")}>
-            <OrganizationSummary
-              offer={offer}
-              description={availability?.description}
-              referralType={referralType}
-            />
-          </Section>
-          <Section title={t("ccn_reason")}>
-            <p className="text-base font-semibold">{title}</p>
-            {note && <p className="whitespace-pre-wrap text-sm">{note}</p>}
-            <p className="text-sm">
-              {t("ccn_urgency")}: {t(`ccn_urgency__${urgency}`)}
-            </p>
-          </Section>
-          {form && (
-            <Section title={form.title}>
-              <NetworkRequestAnswers questions={questions} answers={answers} />
-            </Section>
-          )}
-        </div>
-      )}
-
-      {sendError && (
-        <div
-          role="alert"
-          className="space-y-2 rounded-lg border border-destructive/30 p-4"
-        >
-          <FieldError>{t(sendError.key, { ...sendError.values })}</FieldError>
-          {sendError.recovery === "resolve" && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                sendMutation.reset();
-                void resolveQuery.refetch();
-                moveTo("edit");
-              }}
-            >
-              {t("ccn_reload_forms")}
-            </Button>
-          )}
-          {sendError.recovery === "reselect" && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                pickOffer(null);
-                setChoosing(true);
-                setRediscoverKey((key) => key + 1);
-                moveTo("edit");
-              }}
-            >
-              {t("ccn_choose_another_organization")}
-            </Button>
-          )}
-        </div>
-      )}
-    </div>
+/** Embedded, CARE's own destination section already frames this block. */
+function DestinationSection({
+  embedded,
+  title,
+  children,
+}: {
+  embedded: boolean;
+  title: string;
+  children: ReactNode;
+}) {
+  if (embedded) return <div className="space-y-4">{children}</div>;
+  return (
+    <Section number={1} title={title}>
+      {children}
+    </Section>
   );
 }

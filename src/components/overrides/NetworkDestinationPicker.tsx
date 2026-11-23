@@ -1,14 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { Network } from "lucide-react";
-import {
-  type ReactNode,
-  type RefObject,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { query } from "@/lib/request";
 import { CcnScope } from "@/lib/scope";
@@ -54,9 +47,11 @@ const UNIT_LIMIT = 100;
  * CARE's "Refer to" block with a "Network (CCN)" type added. The CARE types
  * list the referral units of that type, and the dialog continues as usual.
  *
- * "Network (CCN)" runs the network workflow in the same dialog, over CARE's
- * form, when the `CreateReferralDialog` override provides the dialog's
- * patient and encounter. Choosing a CARE type there returns to CARE's form.
+ * "Network (CCN)" runs the network workflow in the same dialog, right below
+ * the type select, when the `CreateReferralDialog` override provides the
+ * dialog's patient and encounter. CARE's reason and form sections and its
+ * Review button do not apply to a network referral and are hidden meanwhile.
+ * Choosing a CARE type again brings them back.
  * Without that override it opens the network referral page instead.
  */
 export default function NetworkDestinationPicker({
@@ -104,6 +99,13 @@ export default function NetworkDestinationPicker({
     });
   }, [dialog, type, facilityId, patientId, encounterId, navigate]);
 
+  const inPlaceActive = type === NETWORK && !!dialog && networkAvailable;
+  const hostRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!inPlaceActive) return;
+    return hideCareFormParts(hostRef.current);
+  }, [inPlaceActive]);
+
   // Without the route context the network type cannot open; keep CARE's.
   if (!networkAvailable && Base) {
     return <Base selected={selected} onSelect={onSelect} />;
@@ -131,13 +133,12 @@ export default function NetworkDestinationPicker({
     </Field>
   );
 
-  const inPlace = type === NETWORK && !!dialog && networkAvailable;
+  const inPlace = inPlaceActive;
 
   return (
     <CcnScope>
-      <div className="space-y-4">
-        {/* In place, the workflow shows the type select itself. */}
-        {!inPlace && typeSelect}
+      <div ref={hostRef} className="space-y-4">
+        {typeSelect}
         {type !== NETWORK ? (
           <UnitSelect
             key={type}
@@ -146,19 +147,14 @@ export default function NetworkDestinationPicker({
             onSelect={onSelect}
           />
         ) : inPlace && dialog && facilityId && patientId ? (
-          <NetworkWorkflowPanel>
-            {(scrollRef) => (
-              <NetworkReferralWorkflow
-                facilityId={facilityId}
-                patientId={patientId}
-                encounterId={encounterId}
-                scrollRef={scrollRef}
-                destinationControl={typeSelect}
-                onCancel={() => setType(lastCoreType)}
-                onSent={dialog.onNetworkReferralSent}
-              />
-            )}
-          </NetworkWorkflowPanel>
+          <NetworkReferralWorkflow
+            embedded
+            facilityId={facilityId}
+            patientId={patientId}
+            encounterId={encounterId}
+            onCancel={() => setType(lastCoreType)}
+            onSent={dialog.onNetworkReferralSent}
+          />
         ) : (
           <p
             role="status"
@@ -174,24 +170,27 @@ export default function NetworkDestinationPicker({
 }
 
 /**
- * Covers CARE's dialog content with the network workflow. It stays inside
- * the dialog (no portal), so the dialog keeps focus and Escape closes both.
+ * Hides the parts of CARE's New Referral dialog that belong to CARE's own
+ * flow: the sections after the destination section and the Review button.
+ * Returns the function that shows them again.
  */
-function NetworkWorkflowPanel({
-  children,
-}: {
-  children: (scrollRef: RefObject<HTMLDivElement | null>) => ReactNode;
-}) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  return (
-    <div
-      ref={scrollRef}
-      className="fixed inset-0 z-50 overflow-y-auto bg-background px-4 pt-6 md:px-8"
-      data-cy="ccn-network-referral-panel"
-    >
-      {children(scrollRef)}
-    </div>
+function hideCareFormParts(host: HTMLElement | null) {
+  const section = host?.closest("section");
+  if (!host || !section?.parentElement) return undefined;
+  const dialog = host.closest('[role="dialog"]') ?? document;
+  const targets = [
+    ...Array.from(section.parentElement.children).filter(
+      (element) => element !== section,
+    ),
+    ...Array.from(dialog.querySelectorAll('button[type="submit"][form]')),
+  ].filter(
+    (element): element is HTMLElement =>
+      element instanceof HTMLElement && element.style.display !== "none",
   );
+  for (const element of targets) element.style.display = "none";
+  return () => {
+    for (const element of targets) element.style.removeProperty("display");
+  };
 }
 
 function stringParam(value: unknown) {
