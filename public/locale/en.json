@@ -78,7 +78,6 @@
   "ccn_sending": "Sending…",
   "ccn_sending_confirm": "Confirming with the network…",
   "ccn_sending_init": "Validating with the network…",
-  "ccn_show_network_status": "Show network status",
   "ccn_transaction": "Network transaction",
   "ccn_transaction_not_linked": "No network transaction is linked to this referral yet.",
   "ccn_transaction_status__awaiting": "Awaiting response",

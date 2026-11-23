@@ -2,6 +2,7 @@ import { Network } from "lucide-react";
 import { lazy } from "react";
 
 import { CreateReferralDialogOverride } from "@/components/overrides/CreateReferralDialogOverride";
+import { ReferralConversationOverride } from "@/components/overrides/ReferralConversationOverride";
 import { ReferralDestinationPickerOverride } from "@/components/overrides/ReferralDestinationPickerOverride";
 import { ReferralStatusBadgeOverride } from "@/components/overrides/ReferralStatusBadgeOverride";
 
@@ -21,9 +22,9 @@ const navItems: PluginNavigationLink[] = [
 /**
  * Uses only CARE's existing plugin points: routes, a facility nav item, the
  * `EncounterActions` / `PatientInfoCardActions` slots and overrides of
- * `CreateReferralDialog`, `ReferralDestinationPicker` and
- * `ReferralStatusBadge` (active when CARE is built with
- * `REACT_MFE_REGISTERED_COMPONENTS=CreateReferralDialog,ReferralDestinationPicker,ReferralStatusBadge`).
+ * `CreateReferralDialog`, `ReferralDestinationPicker`, `ReferralStatusBadge`
+ * and `ReferralConversation` (active when CARE is built with
+ * `REACT_MFE_REGISTERED_COMPONENTS=CreateReferralDialog,ReferralDestinationPicker,ReferralStatusBadge,ReferralConversation`).
  */
 const manifest = {
   plugin: "care_ccn_fe",
@@ -47,6 +48,11 @@ const manifest = {
       component: "ReferralDestinationPicker",
       replacement: ReferralDestinationPickerOverride,
       description: "Adds the Network (CCN) destination type",
+    },
+    {
+      component: "ReferralConversation",
+      replacement: ReferralConversationOverride,
+      description: "Shows the CCN network status on the referral page",
     },
     {
       component: "ReferralStatusBadge",

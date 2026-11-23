@@ -43,12 +43,10 @@ function findReferral(
       .querySelector('a[href*="/referrals/"]')
       ?.getAttribute("href");
     const match = href?.match(REFERRAL_HREF);
-    return match
-      ? { referralId: decodeURIComponent(match[1]), onReferralPage: false }
-      : null;
+    return match ? { referralId: decodeURIComponent(match[1]) } : null;
   }
   if (routeReferralId && !element.closest("dd")) {
-    return { referralId: routeReferralId, onReferralPage: true };
+    return { referralId: routeReferralId };
   }
   return null;
 }
@@ -74,10 +72,7 @@ export function ReferralStatusBadgeOverride({
   useLayoutEffect(() => {
     const next = findReferral(ref.current, routeReferralId);
     setTarget((current) =>
-      current?.referralId === next?.referralId &&
-      current?.onReferralPage === next?.onReferralPage
-        ? current
-        : next,
+      current?.referralId === next?.referralId ? current : next,
     );
   }, [routeReferralId]);
 

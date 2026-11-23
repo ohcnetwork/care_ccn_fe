@@ -18,17 +18,18 @@ It adds:
   `CreateReferralDialog` override, the option opens the network referral
   page instead.
 - A **Network** badge next to the status of network referrals, in CARE's
-  referral lists and on the referral and respond pages. On the referral page
-  the badge opens the network transaction status (status, last error,
-  counterparty, activity, and a "Request update" button). This overrides
+  referral lists and on the referral and respond pages. This overrides
   CARE's `ReferralStatusBadge`. CARE passes that badge only the status, so the
   override finds the referral from the list row's link or the `referralId`
   route param.
+- A **Network status** box above the discussion on the referral page of a
+  network referral (status, last error, counterparty, activity, and a
+  "Request update" button). This overrides CARE's `ReferralConversation`.
 
   The overrides need CARE built with:
 
   ```env
-  REACT_MFE_REGISTERED_COMPONENTS=CreateReferralDialog,ReferralDestinationPicker,ReferralStatusBadge
+  REACT_MFE_REGISTERED_COMPONENTS=CreateReferralDialog,ReferralDestinationPicker,ReferralStatusBadge,ReferralConversation
   ```
 
   Without it CARE's dialog and badges are unchanged and the buttons below
