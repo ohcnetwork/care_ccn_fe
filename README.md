@@ -44,8 +44,9 @@ It adds:
   (`select` → `init` → `confirm`). The referral created at this facility then
   opens on CARE's referral page. The page and the dialog share
   `src/components/network/NetworkReferralWorkflow.tsx`.
-- **Network referrals** page at `/facility/:facilityId/network_referrals`, with
-  a facility sidebar link (outgoing and incoming network transactions).
+- **Network referrals** page at `/admin/network_referrals`, linked from the
+  admin dashboard sidebar (outgoing and incoming network transactions). It is
+  not in the facility nav; CARE's own Referrals page covers day-to-day use.
 
 CARE's questionnaire engine is not available to an app, so the request form is
 rendered by `src/components/network/form/`. It covers the types request forms

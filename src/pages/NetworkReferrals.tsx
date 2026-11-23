@@ -69,13 +69,9 @@ const API_FOR: Record<
   incoming: ccnIncomingReferralRoutes,
 };
 
-interface NetworkReferralsProps {
-  facilityId: string;
-}
+const LIST_PATH = "/admin/network_referrals";
 
-export default function NetworkReferrals({
-  facilityId,
-}: NetworkReferralsProps) {
+export default function NetworkReferrals() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const tab = (useLocation().search as Record<string, unknown>).tab;
@@ -224,7 +220,6 @@ export default function NetworkReferrals({
               <NetworkTransactionDetails
                 direction={direction}
                 transactionId={selected.transaction_id}
-                facilityId={facilityId}
               />
             )}
           </div>
@@ -237,11 +232,9 @@ export default function NetworkReferrals({
 function NetworkTransactionDetails({
   direction,
   transactionId,
-  facilityId,
 }: {
   direction: Direction;
   transactionId: string;
-  facilityId: string;
 }) {
   const { t } = useTranslation();
   const adapter = direction === "outgoing" ? "bap" : "bpp";
@@ -300,7 +293,7 @@ function NetworkTransactionDetails({
                     to="/referrals/$referralId"
                     params={{ referralId: transaction.referral_id }}
                     search={{
-                      sourceUrl: `/facility/${facilityId}/network_referrals?tab=${direction}`,
+                      sourceUrl: `${LIST_PATH}?tab=${direction}`,
                       ccnTransactionId: transactionId,
                     }}
                     className="inline-flex items-center gap-1 font-medium underline-offset-4 hover:underline"

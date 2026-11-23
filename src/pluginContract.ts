@@ -7,7 +7,10 @@ import type { ReactNode } from "react";
 
 export interface PluginNavigationLink {
   name: string;
-  /** Relative to the facility, e.g. `network_referrals`. */
+  /**
+   * Facility nav items are relative to the facility (`network_referrals`);
+   * admin nav items are absolute (`/admin/network_referrals`).
+   */
   url: string;
   icon?: ReactNode;
 }
