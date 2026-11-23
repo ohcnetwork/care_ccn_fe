@@ -366,7 +366,7 @@ test("lists outgoing and incoming network transactions", async ({
     return route.fulfill(json({ errors: [{ msg: "unexpected" }] }, 404));
   });
 
-  await page.goto(`/facility/${fixture.facilityId}/network_referrals`);
+  await page.goto("/admin/network_referrals");
   const rows = page.locator("[data-cy='ccn-transaction-row']");
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText(outgoingId);

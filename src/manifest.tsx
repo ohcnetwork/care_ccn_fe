@@ -10,17 +10,19 @@ import "@/index.css";
 import type { PluginNavigationLink } from "@/pluginContract";
 import routes from "@/routes";
 
-const navItems: PluginNavigationLink[] = [
+// Network referrals are an admin view: they appear in the admin dashboard
+// sidebar, not the facility nav (CARE's own Referrals page covers day-to-day use).
+const adminNavItems: PluginNavigationLink[] = [
   {
     // The host renders plugin nav names as given.
     name: "Network referrals",
-    url: "network_referrals",
+    url: "/admin/network_referrals",
     icon: <Network className="size-4" aria-hidden="true" />,
   },
 ];
 
 /**
- * Uses only CARE's existing plugin points: routes, a facility nav item, the
+ * Uses only CARE's existing plugin points: routes, an admin nav item, the
  * `EncounterActions` / `PatientInfoCardActions` slots and overrides of
  * `CreateReferralDialog`, `ReferralDestinationPicker`, `ReferralStatusBadge`
  * and `ReferralConversation` (active when CARE is built with
@@ -29,7 +31,7 @@ const navItems: PluginNavigationLink[] = [
 const manifest = {
   plugin: "care_ccn_fe",
   routes,
-  navItems,
+  adminNavItems,
   components: {
     EncounterActions: lazy(
       () => import("@/components/pluggables/EncounterActions"),
